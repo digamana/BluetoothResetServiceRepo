@@ -2,7 +2,7 @@
   <h1>Bluetooth 耳機驅動自動重置服務</h1>
   <p><strong>藍牙耳機驅動異常自動偵測與修復工具</strong></p>
   
-  **[繁體中文](#繁體中文)** &nbsp;&nbsp;•&nbsp;&nbsp;
+  **[繁體中文](#繁體中文)** &nbsp;&nbsp;•&nbsp;&nbsp; **[English](#english)**
 </div>
 
 ---
@@ -63,3 +63,65 @@ sc.exe delete "BluetoothResetService"
 sc.exe query "BluetoothResetService"
 
 ```
+建議：安裝完成後重新開機一次，讓服務完全生效。
+
+## English
+
+# Bluetooth Headphone Driver Auto Reset Service
+
+**Auto-detect and repair Bluetooth headphone driver issues on Windows**
+
+This background service checks your Bluetooth headphone every 10 seconds (default keyword: "Air Pro 6"). When a driver anomaly is detected, it automatically performs a reset to fix common Bluetooth connection problems.
+
+### Features
+- Automatically detects driver issues (ErrorCode ≠ 0, Status ≠ OK, or has Problem description)
+- Restarts Bluetooth Support Service (`bthserv`)
+- Performs **Disable → Enable** reset on Bluetooth Radio adapter and target headphone
+- Automatically checks when system resumes from sleep/hibernation
+- Detailed logging to Windows Event Viewer and daily TXT log files in Downloads folder
+- Only resets when truly necessary, avoiding unnecessary interference
+
+### Solves Common Issues
+- Headphone cannot connect
+- Frequent disconnections
+- Poor audio quality
+- Yellow exclamation mark in Device Manager
+
+---
+
+### How to Use
+
+#### 1. Modify Headphone Keyword (Important!)
+Open `BluetoothResetService/BluetoothResetWorker.cs` and change line 8:
+
+```csharp
+private readonly string deviceKeyword = "Your Headphone Name";   // e.g. "Air Pro 6", "PaMu", "WH-1000XM5"
+```
+
+#### 2.Build the Project
+
+Open the project in Visual Studio
+Build Solution (Build → Build Solution)
+Locate the executable BluetoothResetService.exe
+(usually in bin\Debug\net8.0-windows or bin\Release\net8.0-windows folder)
+
+#### 3.Install as Windows Service (Run as Administrator)
+
+```csharp
+# Install the service (recommended: auto start with Windows)
+sc.exe create "BluetoothResetService" binPath= "C:\Your\Full\Path\BluetoothResetService.exe" start= auto DisplayName= "Bluetooth Headphone Auto Reset Service"
+
+# Start the service
+sc.exe start "BluetoothResetService"
+
+# Stop the service
+sc.exe stop "BluetoothResetService"
+
+# Delete / Uninstall the service
+sc.exe delete "BluetoothResetService"
+
+# Check service status
+sc.exe query "BluetoothResetService"
+```
+
+Recommendation: Restart your computer after installation for the service to take full effect.
