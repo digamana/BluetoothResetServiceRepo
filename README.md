@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>Bluetooth 耳機驅動自動重置服務</h1>
+  <h1>Bluetooth 藍牙耳機驅動自動重置服務</h1>
   <p><strong>藍牙耳機驅動異常自動偵測與修復工具</strong></p>
   
   **[繁體中文](#繁體中文)** &nbsp;&nbsp;•&nbsp;&nbsp; **[English](#english)**
