@@ -132,7 +132,7 @@ public class BluetoothResetWorker : BackgroundService
 
             // 設定超時（最多等 30 秒，避免無限卡住）
             if (!process.WaitForExit(30000))  // 30秒超時
-            {
+             {
                 try { process.Kill(); } catch { }
                 Log("PowerShell 執行超時（超過30秒），已強制終止。", EventLogEntryType.Warning);
                 return string.Empty;
@@ -156,44 +156,86 @@ public class BluetoothResetWorker : BackgroundService
     {
         try
         {
-            Log("正在重啟 Bluetooth Support Service (bthserv)...");
-            RunPowerShellCommand("Restart-Service -Name bthserv -Force");
+            Log("正在確認 Bluetooth Support Service (bthserv)...");
+
+            try
+            {
+                using ServiceController sc = new ServiceController("bthserv");
+
+                // 等待 ServiceController 初始化
+                sc.Refresh();
+
+                if (sc.Status == ServiceControllerStatus.Running)
+                {
+                    Log("正在停止 bthserv...");
+
+                    sc.Stop();
+                    sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(15));
+
+                    Log("bthserv 已停止。");
+                }
+
+                Log("正在啟動 bthserv...");
+
+                sc.Start();
+                sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(15));
+
+                Log("bthserv 已啟動。");
+            }
+            catch (Exception ex)
+            {
+                Log($"重啟 bthserv 失敗: {ex.Message}", EventLogEntryType.Warning);
+            }
+
             await Task.Delay(2500);
 
-            // 使用更簡單、安全的重置方式（避免 Remove-PnpDevice 造成的長時間卡住）
             string rawResetScript = $@"
-            $keyword = '{deviceKeyword.Replace("'", "''")}'
-            
-            Write-Host '=== 開始藍牙重置 ==='
-            
-            # 只重置 Bluetooth Radio 適配器（最有效的方式）
-            $radio = Get-PnpDevice | Where-Object {{ $_.Class -eq 'Bluetooth' -and $_.FriendlyName -like '*Bluetooth*' }}
-            foreach ($dev in $radio) {{
-                try {{
-                    Write-Host ""正在重置 Bluetooth 適配器: $($dev.FriendlyName)""
-                    Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
-                    Start-Sleep -Seconds 2
-                    Enable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
-                    Write-Host ""Bluetooth 適配器重置完成: $($dev.FriendlyName)""
-                }} catch {{
-                    Write-Host ""適配器重置失敗: $($dev.FriendlyName)""
-                }}
-            }}
+        $keyword = '{deviceKeyword.Replace("'", "''")}'
 
-            # 簡單處理耳機裝置（只 Disable + Enable，不 Remove）
-            $earphones = Get-PnpDevice | Where-Object {{ $_.FriendlyName -like ""*$keyword*"" }}
-            foreach ($dev in $earphones) {{
-                try {{
-                    Write-Host ""正在重置耳機: $($dev.FriendlyName)""
-                    Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
-                    Start-Sleep -Seconds 2
-                    Enable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
-                    Write-Host ""耳機重置完成: $($dev.FriendlyName)""
-                }} catch {{ }}
+        Write-Host '=== 開始藍牙重置 ==='
+
+        $radio = Get-PnpDevice | Where-Object {{
+            $_.Class -eq 'Bluetooth' -and $_.FriendlyName -like '*Bluetooth*'
+        }}
+
+        foreach ($dev in $radio) {{
+            try {{
+                Write-Host ""正在重置 Bluetooth 適配器: $($dev.FriendlyName)""
+
+                Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+
+                Start-Sleep -Seconds 2
+
+                Enable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+
+                Write-Host ""Bluetooth 適配器重置完成: $($dev.FriendlyName)""
             }}
-            
-            Write-Host '=== 重置腳本執行完畢 ==='
-        ";
+            catch {{
+                Write-Host ""適配器重置失敗: $($dev.FriendlyName)""
+            }}
+        }}
+
+        $earphones = Get-PnpDevice | Where-Object {{
+            $_.FriendlyName -like ""*$keyword*""
+        }}
+
+        foreach ($dev in $earphones) {{
+            try {{
+                Write-Host ""正在重置耳機: $($dev.FriendlyName)""
+
+                Disable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+
+                Start-Sleep -Seconds 2
+
+                Enable-PnpDevice -InstanceId $dev.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+
+                Write-Host ""耳機重置完成: $($dev.FriendlyName)""
+            }}
+            catch {{}}
+        }}
+
+        Write-Host '=== 重置腳本執行完畢 ==='
+    ";
 
             byte[] bytes = System.Text.Encoding.Unicode.GetBytes(rawResetScript);
             string encodedCommand = Convert.ToBase64String(bytes);
@@ -202,10 +244,9 @@ public class BluetoothResetWorker : BackgroundService
             Log("開始執行簡化版藍牙重置腳本...");
             RunPowerShellCommandWithOutputEncoded(psCommand);
 
-            await Task.Delay(6000);   // 給系統 6 秒重新初始化
+            await Task.Delay(6000);
 
-            Log("藍牙重置流程完成！請等待 10~20 秒後嘗試連接你的 Air Pro 6 耳機。");
-            Log("如果還是無法連接，建議手動在裝置管理員對「Intel(R) Wireless Bluetooth」右鍵 → 解除安裝裝置 → 掃描硬體變更。");
+            Log("藍牙重置流程完成！");
         }
         catch (Exception ex)
         {
